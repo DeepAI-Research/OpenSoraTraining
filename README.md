@@ -1,6 +1,8 @@
 # OpenSoraTraining
 A hacker's guide to training Open Sora Plan on your custom dataset and GPUs.
 
+> **_NOTE:_** ⚠️ STILL UNDER CONSTRUCTION
+
 ### Setting up Vast for training
 
 To SSH into a Vast.ai instance, you need to follow these general steps:
@@ -34,9 +36,7 @@ Specific versions of software (e.g., PyTorch, TensorFlow).
 Runtime environments with specific libraries and dependencies.
 Custom settings and configurations tailored to certain workflows or applications.
 
-
 Since you're working with a machine learning model, the "Pytorch 2.2.0 Cuda12.1 Devel" template or any other PyTorch template with the appropriate CUDA support should be suitable. These templates will have the necessary libraries pre-installed and allow you to set up your environment without Docker.
-
 
 3) Renting out GPUs
 
@@ -57,8 +57,7 @@ Wait a minute and then enter your paraphrase...
 5) Clone Open Sora Plan into your Vast instance
 
 ```
-git clone https://github.com/RaccoonResearch/Open-Sora-Plan.git
-git checkout raccoon/training
+git clone https://github.com/eric-prog/Open-Sora-Plan-RR.git
 ```
 
 if you do ls you will see Open-Sora-Plan is indeed in your directory. Now ```cd Open-Sora-Plan```
@@ -72,9 +71,9 @@ conda --version
 
 Then install required packages in this order:
 ```
-cd Open-Sora-Plan
+cd Open-Sora-Plan-RR
 conda create -n opensora python=3.8 -y
-conda activate opensora
+conda activate opensora OR source activate opensora
 pip install -e .
 ```
 
@@ -84,76 +83,97 @@ pip install -e ".[train]"
 pip install flash-attn --no-build-isolation
 ```
 
-Install optional requirements such as static type checking:
-```
-pip install -e '.[dev]'
-```
-
-Now let's install the weights for the model from  [Hugging face](https://huggingface.co/LanguageBind/Open-Sora-Plan-v1.0.0/tree/main?clone=true). Clone the repo.
-
 Make sure we have git lfs installed. Git lsf is an extension to git and it's used to handle large files more efficiently.
 ```
 sudo apt install git-lfs
 git lfs install
-git clone https://huggingface.co/LanguageBind/Open-Sora-Plan-v1.0.0
 ```
 
 ### Training Open-Sora-Plan
 
-1) Take a look at  [Open Sora Plan](https://github.com/RaccoonResearch/Open-Sora-Plan)
+Let's setup the pretrained model. 
 
-More specifically take a look at [Raccoon Research's changes](https://github.com/RaccoonResearch/Open-Sora-Plan/pull/1/files)
-
-```
-# BEFORE: 
-num_processes: 8
-gpu_ids: 0,1,2,3,4,5,6,7
-use_cpu: false
-
-
-# AFTER (yes you need that unnecessary comma after the 0):
-num_processes: 1
-gpu_ids: 0,
-use_cpu: false
-```
-
-We're going to be training on 1 GPU so we're going to set our gpu_ids count to be 0 and the use_cpu to false (unless you want to run this on your PC hehe) 
+1) Download the t2v pretrained model using the custom download script
 
 ```
-# BEFORE: 
---ae_path CausalVAEModel_4x8x8 \
---data_path /remote-home1/dataset/sharegpt4v_path_cap_.json \
---video_folder /remote-home1/dataset/data_split_tt \
-
-# AFTER:
---ae_path "./Open-Sora-Plan-v1.0.0/vae" \
---data_path "./videos/captions.json" \
---video_folder "./videos" \
+python3 scripts/download_t2v.py
 ```
 
-We're going to change our model path to be ```./Open-Sora-Plan-v1.0.0/vae```. We're also going to change our 
-```data_path``` and ```video_folder``` paths which will contain our captions and mp4 videos perpared.
-
+When you ```ls``` you will notice you can't see it because it's stored in cache. Run this command:
 ```
-# BEFORE: 
---dataloader_num_workers 10 \
-
-# AFTER: 
---dataloader_num_workers 1 \
+cp /root/.cache/huggingface/hub/models--maxin-cn--Latte/snapshots/<...>/t2v.pt ./t2v.pt
 ```
 
-We're going to set a single process handles all data loading.
+2) Download the vae
 
-2) Back to Vast
+```
+mkdir vae
+
+python3 scripts/download_vae.py
+
+# after installation
+cp /root/.cache/huggingface/hub/models--LanguageBind--Open-Sora-Plan-v1.0.0/snapshots/<...>/vae/* vae
+```
+
+3) Edit hyperparams in the ```scripts/text_condition/train_videoae_65x512x512.sh```
+
+You have downloaded everything.
+
+We're going to use the t2v.pt file as our pretrain model. These are the initial weights of the diffusion model which helps in starting the training from an already trained model state.
+
+Our ae path will be the Open-Sora-Plan-RR/vae which contains the config.json and the tensor file containing the weights for the vae.
+
+
+Changes shown below are already configured in the [repo](https://github.com/eric-prog/Open-Sora-Plan-RR/blob/main/scripts/text_condition/train_videoae_65x512x512.sh), just showing it bellow.
+```
+export WANDB_KEY=""
+export ENTITY=""
+export PROJECT="t2v-f65-256-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5"
+accelerate launch \
+    --config_file scripts/accelerate_configs/deepspeed_zero2_config.yaml \
+    opensora/train/train_t2v.py \
+    --model LatteT2V-XL/122 \
+    --text_encoder_name DeepFloyd/t5-v1_1-xxl \
+    --dataset t2v \
+    --ae CausalVAEModel_4x8x8 \
+    --ae_path /root/Open-Sora-Plan-RR/vae \
+    --data_path "./videos/captions.json" \
+    --video_folder "./videos" \
+    --sample_rate 1 \
+    --num_frames 65 \
+    --max_image_size 512 \
+    --gradient_checkpointing \
+    --attention_mode xformers \
+    --train_batch_size=2 \
+    --dataloader_num_workers 10 \
+    --gradient_accumulation_steps=1 \
+    --max_train_steps=1000000 \
+    --learning_rate=2e-05 \
+    --lr_scheduler="constant" \
+    --lr_warmup_steps=0 \
+    --mixed_precision="bf16" \
+    --report_to="wandb" \
+    --checkpointing_steps=500 \
+    --output_dir="t2v-f65-512-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5" \
+    --allow_tf32 \
+    --pretrained "/root/Open-Sora-Plan-RR/t2v.pt" \
+    --use_deepspeed \
+    --model_max_length 300 \
+    --use_image_num 16 \
+    --use_img_from_vid \
+    --enable_tiling
+```
+
+4) Let's make our videos folder for the dataset.
 
 ```
 cd Open-Sora-Plan
 mkdir videos
 ```
 
-3) Your video dataset
+5) Use scp to transfer it to the Vast.ai instance
 
-You can use scp to transfer it to the Vast.ai instance
+The command bellow will transfer all .mp4 files into the videos directory in your Vast instance.
 
 ```
 scp -i ~/.ssh/your_private.pem -P <port> ./renders/*.mp4 root@<instance_ip>:/root/Open-Sora-Plan/videos/
@@ -169,7 +189,7 @@ Add that to the videos folder too (MAKE SURE THE PATHS MATCH WHAT'S ON YOUR VAST
 scp -i ~/.ssh/your_private.pem -P <port> ./captions.json root@<instance_ip>:/root/Open-Sora-Plan/videos/
 ```
 
-### NOW TRAIN
+### TRAIN
 
 Go get your API key from [wandb](https://wandb.ai/home)
 
