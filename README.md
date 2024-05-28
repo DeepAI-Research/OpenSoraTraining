@@ -135,8 +135,8 @@ We're going to use the t2v.pt file as our pretrain model. These are the initial 
 
 Our ae path will be the Open-Sora-Plan-RR/vae which contains the config.json and the tensor file containing the weights for the vae.
 
-
 Changes shown below are already configured in the [repo](https://github.com/eric-prog/Open-Sora-Plan-RR/blob/main/scripts/text_condition/train_videoae_65x512x512.sh), just showing it bellow.
+
 ```
 export WANDB_KEY=""
 export ENTITY=""
@@ -164,8 +164,7 @@ accelerate launch \
     --lr_scheduler="constant" \
     --lr_warmup_steps=0 \
     --mixed_precision="bf16" \
-    --report_to="wandb" \
-    --checkpointing_steps=500 \
+    --checkpointing_steps=1 \
     --output_dir="t2v-f65-512-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5" \
     --allow_tf32 \
     --pretrained "/root/Open-Sora-Plan-RR/t2v.pt" \
@@ -243,23 +242,7 @@ WANDB_KEY=your_key bash scripts/text_condition/train_videoae_65x512x512.sh
 
 Beautiful isn't it.
 
-2) Wait a bit and then cancel it once it gets to like 2/100000.
-
-<img src="./assets/terminal6.png" />
-
-3) Now you will see a file called ```t2v-f65-512-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5```. That's what we want.
-
-Now we need to download [OpenSoraPlan1.0.0 65x512x512 model](https://huggingface.co/LanguageBind/Open-Sora-Plan-v1.0.0/tree/main/65x512x512).
-
-<img src="./assets/terminal7.png" />
-
-4) Let's create a new folder called 65x512x512
-
-```
-mkdir 65x512x512
-
-cp /root/.cache/huggingface/hub/models--LanguageBind--Open-Sora-Plan-v1.0.0/snapshots/<...>/65x512x512/* 65x512x512/
-```
+2) Wait a bit and then cancel it once it gets to like 5/100000, or when you get checkpoint-1 up until checkpoint-2 generated just to be safe and then quit. Use checkpoint-1 (but you will know what I'm talking about later on).
 
 <img src="./assets/terminal8.png" />
 
@@ -276,7 +259,7 @@ accelerate launch \
     --text_encoder_name DeepFloyd/t5-v1_1-xxl \
     --dataset t2v \
     --ae CausalVAEModel_4x8x8 \
-    --ae_path /root/Open-Sora-Plan-RR/65x512x512 \
+    --ae_path /root/Open-Sora-Plan-RR/vae \
     --data_path "./videos/captions.json" \
     --video_folder "./videos" \
     --sample_rate 1 \
@@ -284,7 +267,7 @@ accelerate launch \
     --max_image_size 512 \
     --gradient_checkpointing \
     --attention_mode xformers \
-    --train_batch_size=2 \
+    --train_batch_size=1 \
     --dataloader_num_workers 10 \
     --gradient_accumulation_steps=1 \
     --max_train_steps=1000000 \
@@ -296,7 +279,7 @@ accelerate launch \
     --checkpointing_steps=500 \
     --output_dir="t2v-f65-512-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5" \
     --allow_tf32 \
-    --pretrained "/root/Open-Sora-Plan-RR/65x512x512/diffusion_pytorch_model.safetensors" \
+    --resume_from_checkpoint "/root/Open-Sora-Plan-RR/t2v-f65-512-img16-videovae488-bf16-ckpt-xformers-bs4-lr2e-5-t5/checkpoint-1" \
     --use_deepspeed \
     --model_max_length 300 \
     --use_image_num 16 \
@@ -318,5 +301,5 @@ accelerate launch \
 Now let's train, fr.
 
 ```
-WANDB_KEY=your_key bash scripts/text_condition/train_videoae_65x512x512.sh
+WANDB_KEY=<your_key> bash scripts/text_condition/train_videoae_65x512x512.sh
 ```
