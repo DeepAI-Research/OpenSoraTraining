@@ -242,7 +242,7 @@ WANDB_KEY=your_key bash scripts/text_condition/train_videoae_65x512x512.sh
 
 Beautiful isn't it.
 
-2) Wait a bit and then cancel it once it gets to like 5/100000, or when you get checkpoint-1 up until checkpoint-2 generated just to be safe and then quit. Use checkpoint-1 (but you will know what I'm talking about later on).
+2) Wait a bit and then cancel it once it gets to like 5/100000, or when you see checkpoint-1 up until checkpoint-2 in the terminal (YOU MUST GET THIS checkpoints). generated just to be safe and then quit. Use checkpoint-1 (but you will know what I'm talking about later on).
 
 3) Edit hyperparams again in the ```scripts/text_condition/train_videoae_65x512x512.sh``` (you will have to push and pull).
 
