@@ -290,10 +290,6 @@ accelerate launch \
 
 <img src="./assets/terminal10.png" />
 
-<br> 
-
-<img src="./assets/terminal11.png" />
-
 ## FINALLY FINETUNE
 
 Now let's train, fr.
